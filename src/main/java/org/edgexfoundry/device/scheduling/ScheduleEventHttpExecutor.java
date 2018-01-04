@@ -34,8 +34,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ScheduleEventHttpExecutor {
 
-  private static final EdgeXLogger logger =
-      EdgeXLoggerFactory.getEdgeXLogger(ScheduleEventHttpExecutor.class);
+  private final EdgeXLogger logger =
+      EdgeXLoggerFactory.getEdgeXLogger(this.getClass());
 
   @Value("${service.timeout}")
   private int timeout;
@@ -64,18 +64,16 @@ public class ScheduleEventHttpExecutor {
         con.setRequestProperty("Content-Type", "application/json");
         con.setRequestProperty("Content-Length", "" + body.length());
         
-        try (OutputStream os = con.getOutputStream()) {
-          os.write(body.getBytes());
-          returnCode = con.getResponseCode();
-        }
+        OutputStream os = con.getOutputStream();
+        os.write(body.getBytes());
+        returnCode = con.getResponseCode();
 
         logger.debug("executed event " + event.getId() + " '" + event.getName()
             + "' response code " + returnCode + " url '" + url + "' body '" + body + "'");
       } 
     } catch (Exception e) {
-      logger.error("exception executing event " + event.getId() + " '" + event.getName()
+      logger.warn("exception executing event " + event.getId() + " '" + event.getName()
           + "' url '" + url + "' body '" + body + "' exception " + e.getMessage());
-      e.printStackTrace();
     }
   }
 

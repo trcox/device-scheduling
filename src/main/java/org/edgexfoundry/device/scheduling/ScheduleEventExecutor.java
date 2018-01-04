@@ -29,8 +29,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 public class ScheduleEventExecutor {
 
-  private static final EdgeXLogger logger =
-      EdgeXLoggerFactory.getEdgeXLogger(ScheduleEventExecutor.class);
+  private final EdgeXLogger logger =
+      EdgeXLoggerFactory.getEdgeXLogger(this.getClass());
 
   @Autowired
   ScheduleEventHttpExecutor httpExecutor;

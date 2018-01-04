@@ -21,6 +21,7 @@ package org.edgexfoundry.device.scheduling;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -33,6 +34,7 @@ import org.edgexfoundry.controller.ScheduleClient;
 import org.edgexfoundry.controller.ScheduleEventClient;
 import org.edgexfoundry.controller.impl.ScheduleClientImpl;
 import org.edgexfoundry.controller.impl.ScheduleEventClientImpl;
+import org.edgexfoundry.device.domain.configuration.BaseService;
 import org.edgexfoundry.device.domain.configuration.ScheduleConfiguration;
 import org.edgexfoundry.device.domain.configuration.ScheduleEventConfiguration;
 import org.edgexfoundry.domain.meta.Addressable;
@@ -41,6 +43,7 @@ import org.edgexfoundry.domain.meta.ScheduleEvent;
 import org.edgexfoundry.support.logging.client.EdgeXLogger;
 import org.edgexfoundry.support.logging.client.EdgeXLoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -51,7 +54,7 @@ import org.springframework.stereotype.Component;
 @Component
 @EnableScheduling
 public class Scheduler {
-  private static final EdgeXLogger logger = EdgeXLoggerFactory.getEdgeXLogger(Scheduler.class);
+  private final EdgeXLogger logger = EdgeXLoggerFactory.getEdgeXLogger(this.getClass());
 
   // Client to fetch schedule events
   @Autowired
@@ -75,6 +78,9 @@ public class Scheduler {
 
   @Autowired
   private ScheduleEventConfiguration defaultScheduleEvents;
+  
+  @Autowired
+  private BaseService baseService;
 
   // Schedule id -> Schedule Context Mapping
   // used to find the schedule context given a schedule, e.g. update/delete this schedule
@@ -109,16 +115,15 @@ public class Scheduler {
 
   @Scheduled(fixedRateString = "${schedule.interval}")
   public void schedule() {
+    // Instant is in epoch time
+    Instant nowInstant = Instant.now();
+    long nowEpoch = nowInstant.getEpochSecond();
+
+    // logger.debug("tick " + nowInstant.toString());
+
     synchronized (scheduleContextQueue) {
-      
-      // Instant is in epoch time
-      Instant nowInstant = Instant.now();
-      long nowEpoch = nowInstant.getEpochSecond();
-
-      // logger.debug("tick " + nowInstant.toString());
-
-      while (scheduleContextQueue.peek() != null
-          && scheduleContextQueue.peek().getNextTime().toEpochSecond() <= nowEpoch) {
+        while (scheduleContextQueue.peek() != null 
+            && scheduleContextQueue.peek().getNextTime().toEpochSecond() <= nowEpoch) {
         try {
           // pop the schedule context off the queue
           ScheduleContext scheduleContext = scheduleContextQueue.remove();
@@ -126,8 +131,11 @@ public class Scheduler {
           logger.debug("executing schedule " + scheduleContext.getInfo() + " at "
               + scheduleContext.getNextTime());
 
-          // run the events for the schedule
-          scheduleEventExecutor.execute(scheduleContext.getScheduleEvents());
+          if (baseService.isInitialized()) {
+            // run the events for the schedule
+            LinkedHashMap<String, ScheduleEvent> events = scheduleContext.getScheduleEvents();
+            new Thread (() -> scheduleEventExecutor.execute(events)).start();
+          }
 
           // update the context
           scheduleContext.updateNextTime();
@@ -142,7 +150,7 @@ public class Scheduler {
             scheduleContextQueue.add(scheduleContext);
           }
         } catch (Exception e) {
-          logger.error("exception while scheduling schedule contects" + e);
+          logger.error("exception while scheduling schedule contexts" + e);
         }
       }
     }
@@ -307,6 +315,16 @@ public class Scheduler {
       logger.info("resetting all schedules");
     }
   }
+  
+  @Async
+	public void clear()
+	{
+		synchronized (scheduleContextQueue)
+		{
+			scheduleContextQueue.clear();
+			logger.info("clean up all schedules");
+		}
+	}
 
   // Scheduler implementation of initialize
   public boolean initialize(String serviceName) {

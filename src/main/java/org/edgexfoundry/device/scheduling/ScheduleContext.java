@@ -36,8 +36,8 @@ import org.edgexfoundry.support.logging.client.EdgeXLogger;
 import org.edgexfoundry.support.logging.client.EdgeXLoggerFactory;
 
 public class ScheduleContext {
-  private static final EdgeXLogger logger =
-      EdgeXLoggerFactory.getEdgeXLogger(ScheduleContext.class);
+  private final EdgeXLogger logger =
+      EdgeXLoggerFactory.getEdgeXLogger(this.getClass());
 
   // TODO: if we store runonce and name then can remove
   Schedule schedule;
